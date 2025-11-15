@@ -9,7 +9,7 @@ const friends = await getCollection("friends");
 
 // 按分类分组友链
 const friendsByCategory = friends.reduce(
-	(acc: Record<string, CollectionEntry<"friends">[]>, friend) => {
+	(acc, friend) => {
 		const category = friend.data.category || "其他";
 		if (!acc[category]) {
 			acc[category] = [];
