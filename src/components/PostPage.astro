@@ -8,6 +8,11 @@ const { page } = Astro.props;
 let delay = 0;
 const interval = 50;
 ---
+<!-- 隐藏的h1标签，仅用于SEO，不影响视觉效果 -->
+<h1 class="sr-only">
+    {page.currentPage === 1 ? "freebird2913技术博客 - 专注编程学习与数码科技分享" : `文章列表 - 第 ${page.currentPage} 页`}
+</h1>
+
 <div class="transition flex flex-col rounded-[var(--radius-large)] bg-[var(--card-bg)] py-1 md:py-0 md:bg-transparent md:gap-4 mb-4">
     {page.data.map((entry: CollectionEntry<"posts">) => (
         <PostCard

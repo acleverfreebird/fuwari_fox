@@ -1,0 +1,259 @@
+---
+/**
+ * Umami 浏览量显示组件
+ * 支持显示总浏览量和单页浏览量
+ */
+import { umamiStatsConfig } from "@/config";
+
+interface Props {
+	type?: "total" | "page"; // 显示类型: total=总浏览量, page=页面浏览量
+	url?: string; // 页面URL (type=page时必需)
+	showVisitors?: boolean; // 是否显示访问者数量
+	class?: string;
+}
+
+const {
+	type = "total",
+	url,
+	showVisitors = true,
+	class: className,
+} = Astro.props;
+
+// 如果未启用统计功能,不渲染组件
+if (!umamiStatsConfig.enable) {
+	return null;
+}
+
+// 如果是页面浏览量但未提供URL,不渲染
+if (type === "page" && !url) {
+	console.warn("UmamiPageViews: type='page' requires url prop");
+	return null;
+}
+
+// 生成唯一ID用于DOM操作
+const componentId = `umami-views-${Math.random().toString(36).slice(2, 11)}`;
+---
+
+<div class:list={["umami-page-views", className]} id={componentId} data-type={type} data-url={url} data-show-visitors={showVisitors}>
+	<div class="stat-item pageviews-item">
+		<span class="label">浏览量:</span>
+		<span class="views-count">
+			<span class="loading">...</span>
+			<span class="count" style="display: none;">0</span>
+			<span class="error" style="display: none;">--</span>
+		</span>
+	</div>
+	{showVisitors && (
+		<div class="stat-item visitors-item">
+			<span class="label">访客数量:</span>
+			<span class="visitors-count">
+				<span class="loading">...</span>
+				<span class="count" style="display: none;">0</span>
+			</span>
+		</div>
+	)}
+</div>
+
+<script>
+	import { umamiStatsConfig } from "@/config";
+
+	interface ViewsData {
+		pageviews?: number;
+		total?: number;
+		visitors?: number;
+		error?: string;
+	}
+
+	/**
+	 * 格式化数字显示
+	 */
+	function formatNumber(num: number): string {
+		return num.toLocaleString();
+	}
+
+	/**
+	 * 获取浏览量数据
+	 */
+	async function fetchPageViews(type: string, url?: string): Promise<ViewsData> {
+		try {
+			let apiUrl = `${umamiStatsConfig.apiUrl}/stats/total`;
+			if (type === "page" && url) {
+				apiUrl = `${umamiStatsConfig.apiUrl}/stats/page?url=${encodeURIComponent(url)}`;
+			}
+
+			console.log("📊 Fetching stats from:", apiUrl);
+			
+			const response = await fetch(apiUrl, {
+				method: 'GET',
+				headers: {
+					'Accept': 'application/json',
+				},
+				cache: 'no-cache'
+			});
+			
+			if (!response.ok) {
+				throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+			}
+
+			const data = await response.json();
+			console.log("✅ Stats received:", data);
+			return data;
+		} catch (error) {
+			console.error("❌ Failed to fetch stats:", error);
+			return { error: (error as Error).message };
+		}
+	}
+
+	/**
+	 * 更新显示
+	 */
+	function updateDisplay(container: HTMLElement, data: ViewsData) {
+		console.log("🔄 Updating display with data:", data);
+		
+		// 获取浏览量相关元素
+		const pageviewsItem = container.querySelector(".pageviews-item");
+		if (!pageviewsItem) {
+			console.error("❌ pageviews-item not found");
+			return;
+		}
+
+		const viewsLoading = pageviewsItem.querySelector(".loading") as HTMLElement;
+		const viewsCount = pageviewsItem.querySelector(".count") as HTMLElement;
+		const viewsError = pageviewsItem.querySelector(".error") as HTMLElement;
+
+		// 隐藏加载状态
+		if (viewsLoading) viewsLoading.style.display = "none";
+
+		// 处理错误
+		if (data.error) {
+			console.error("❌ Error in data:", data.error);
+			if (viewsError) viewsError.style.display = "inline";
+			if (viewsCount) viewsCount.style.display = "none";
+			return;
+		}
+
+		// 获取浏览量数值 (优先使用 pageviews，其次 total)
+		const viewCount = data.pageviews ?? data.total ?? 0;
+		console.log("📈 View count:", viewCount);
+
+		// 更新浏览量显示
+		if (viewsCount) {
+			viewsCount.textContent = formatNumber(viewCount);
+			viewsCount.style.display = "inline";
+			if (viewsError) viewsError.style.display = "none";
+			console.log("✅ Pageviews updated to:", viewCount);
+		}
+
+		// 更新访客数量
+		const showVisitors = container.getAttribute("data-show-visitors") === "true";
+		if (showVisitors && data.visitors !== undefined) {
+			const visitorsItem = container.querySelector(".visitors-item");
+			if (visitorsItem) {
+				const visitorsLoading = visitorsItem.querySelector(".loading") as HTMLElement;
+				const visitorsCount = visitorsItem.querySelector(".count") as HTMLElement;
+
+				if (visitorsLoading) visitorsLoading.style.display = "none";
+				if (visitorsCount) {
+					visitorsCount.textContent = formatNumber(data.visitors);
+					visitorsCount.style.display = "inline";
+					console.log("✅ Visitors updated to:", data.visitors);
+				}
+			}
+		}
+	}
+
+	/**
+	 * 初始化单个组件
+	 */
+	async function initComponent(container: HTMLElement) {
+		const type = container.getAttribute("data-type") || "total";
+		const url = container.getAttribute("data-url") || undefined;
+
+		console.log("🚀 Initializing component:", { type, url });
+
+		try {
+			const data = await fetchPageViews(type, url);
+			updateDisplay(container, data);
+		} catch (error) {
+			console.error("❌ Error initializing component:", error);
+			updateDisplay(container, { error: (error as Error).message });
+		}
+	}
+
+	/**
+	 * 初始化所有组件
+	 */
+	function initAllComponents() {
+		if (!umamiStatsConfig.enable) {
+			console.log("⚠️ Umami stats disabled");
+			return;
+		}
+
+		console.log("🔍 Looking for .umami-page-views components");
+		const containers = document.querySelectorAll(".umami-page-views");
+		console.log(`📦 Found ${containers.length} component(s)`);
+
+		containers.forEach((container) => {
+			initComponent(container as HTMLElement);
+		});
+	}
+
+	// 页面加载完成后初始化
+	if (document.readyState === "loading") {
+		document.addEventListener("DOMContentLoaded", initAllComponents);
+	} else {
+		// DOM 已经加载完成，直接初始化
+		initAllComponents();
+	}
+
+	// 支持 Astro 页面导航
+	document.addEventListener("astro:page-load", initAllComponents);
+</script>
+
+<style>
+	.umami-page-views {
+		display: inline-flex;
+		align-items: center;
+		gap: 1.5rem;
+		font-size: 0.875rem;
+		color: var(--color-text-secondary, #666);
+	}
+
+	.stat-item {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.label {
+		font-size: 0.875rem;
+		opacity: 0.9;
+		font-weight: 500;
+	}
+
+	.views-count,
+	.visitors-count {
+		font-variant-numeric: tabular-nums;
+		font-weight: 600;
+		color: var(--color-text-primary, #333);
+	}
+
+	.loading {
+		opacity: 0.6;
+		font-size: 0.75rem;
+	}
+
+	.error {
+		opacity: 0.4;
+	}
+
+	/* 深色模式支持 */
+	:global(.dark) .umami-page-views {
+		color: var(--color-text-secondary-dark, #999);
+	}
+
+	:global(.dark) .views-count,
+	:global(.dark) .visitors-count {
+		color: var(--color-text-primary-dark, #eee);
+	}
+</style>

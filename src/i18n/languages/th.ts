@@ -35,4 +35,11 @@ export const th: Translation = {
 	[Key.author]: "ผู้เขียน",
 	[Key.publishedAt]: "เผยแพร่เมื่อ",
 	[Key.license]: "สัญญาอนุญาต",
+
+	[Key.friends]: "เพื่อน",
+	[Key.friendsDescription]: "นี่คือเพื่อน ๆ ของฉัน ขอเชิญเยี่ยมชมกัน!",
+	[Key.music]: "เพลง",
+	[Key.musicDescription]: "คอลเลคชันเพลงโปรดของฉัน ฟังเพลงเพราะๆ ได้ตลอดเวลา",
+	[Key.gallery]: "แกลลอรี่",
+	[Key.galleryDescription]: "แกลลอรี่ภาพที่แสดงช่วงเวลาที่น่าจดจำและทิวทัศน์ที่สวยงาม",
 };

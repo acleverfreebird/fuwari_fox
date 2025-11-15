@@ -35,4 +35,14 @@ export const en: Translation = {
 	[Key.author]: "Author",
 	[Key.publishedAt]: "Published at",
 	[Key.license]: "License",
+
+	[Key.friends]: "Friends",
+	[Key.friendsDescription]:
+		"These are my friends, feel free to visit each other!",
+	[Key.music]: "Music",
+	[Key.musicDescription]:
+		"My favorite music collection, listen to beautiful melodies at any time",
+	[Key.gallery]: "Gallery",
+	[Key.galleryDescription]:
+		"Photo gallery showcasing memorable moments and beautiful scenes",
 };

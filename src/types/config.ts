@@ -24,6 +24,8 @@ export type SiteConfig = {
 		enable: boolean;
 		src: string;
 		position?: "top" | "center" | "bottom";
+		mobilePosition?: "top" | "center" | "bottom";
+		tabletPosition?: "top" | "center" | "bottom";
 		credit: {
 			enable: boolean;
 			text: string;
@@ -48,6 +50,9 @@ export enum LinkPreset {
 	Home = 0,
 	Archive = 1,
 	About = 2,
+	Friends = 3,
+	Music = 4,
+	Gallery = 5,
 }
 
 export type NavBarLink = {
@@ -99,4 +104,42 @@ export type BlogPostData = {
 
 export type ExpressiveCodeConfig = {
 	theme: string;
+};
+
+export type MusicItem = {
+	id: string;
+	title: string;
+	artist: string;
+	album: string;
+	coverUrl: string;
+	musicUrl: string;
+	duration: string;
+	description?: string;
+};
+
+export type MusicData = {
+	songs: MusicItem[];
+};
+
+export type GalleryItem = {
+	id: string;
+	title: string;
+	description: string;
+	imageUrl: string;
+	tags: string[];
+	date: string;
+	photographer: string;
+};
+
+export type GalleryData = {
+	images: GalleryItem[];
+};
+
+export type UmamiConfig = {
+	enable: boolean; // 是否启用 Umami
+	src: string; // Umami 脚本地址
+	websiteId: string; // 网站 ID
+	domains?: string; // (可选) 限制追踪的域名
+	autoTrack?: boolean; // (可选) 自动追踪,默认 true
+	delayLoad?: number; // (可选) 延迟加载时间(毫秒),默认 2000
 };
