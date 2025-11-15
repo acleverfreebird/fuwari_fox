@@ -8,12 +8,34 @@ interface Props {
 	alt?: string;
 	position?: string;
 	basePath?: string;
+	loading?: "lazy" | "eager";
+	priority?: boolean;
+	fetchpriority?: "high" | "low" | "auto";
+	sizes?: string;
+	width?: number;
+	height?: number;
+	mobilePosition?: string; // 移动端专用位置
+	tabletPosition?: string; // 平板端专用位置
 }
 
 import { Image } from "astro:assets";
 import { url } from "../../utils/url-utils";
 
-const { id, src, alt, position = "center", basePath = "/" } = Astro.props;
+const {
+	id,
+	src,
+	alt,
+	position = "center",
+	mobilePosition = "center", // 默认移动端也使用center
+	tabletPosition = "center", // 默认平板端也使用center
+	basePath = "/",
+	loading = "lazy",
+	priority = false,
+	fetchpriority = "auto",
+	sizes = "(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw",
+	width,
+	height,
+} = Astro.props;
 const className = Astro.props.class;
 
 const isLocal = !(
@@ -44,11 +66,64 @@ if (isLocal) {
 	img = await file();
 }
 
-const imageClass = "w-full h-full object-cover";
-const imageStyle = `object-position: ${position}`;
+const imageClass = "w-full h-full object-cover banner-image";
+// 使用CSS变量来支持响应式object-position
 ---
 <div id={id} class:list={[className, 'overflow-hidden relative']}>
     <div class="transition absolute inset-0 dark:bg-black/10 bg-opacity-50 pointer-events-none"></div>
-    {isLocal && img && <Image src={img} alt={alt || ""} class={imageClass} style={imageStyle}/>}
-    {!isLocal && <img src={isPublic ? url(src) : src} alt={alt || ""} class={imageClass} style={imageStyle}/>}
+    {isLocal && img && (
+        <Image
+            src={img}
+            alt={alt || ""}
+            class={imageClass}
+            style={`--desktop-position: ${position}; --mobile-position: ${mobilePosition}; --tablet-position: ${tabletPosition};`}
+            loading={priority ? "eager" : loading}
+            decoding={priority ? "sync" : "async"}
+            fetchpriority={fetchpriority}
+            sizes={sizes}
+            width={width}
+            height={height}
+        />
+    )}
+    {!isLocal && (
+        <img
+            src={isPublic ? url(src) : src}
+            alt={alt || ""}
+            class={imageClass}
+            style={`--desktop-position: ${position}; --mobile-position: ${mobilePosition}; --tablet-position: ${tabletPosition};`}
+            loading={priority ? "eager" : loading}
+            decoding={priority ? "sync" : "async"}
+            fetchpriority={fetchpriority}
+            width={width}
+            height={height}
+        />
+    )}
 </div>
+
+<style>
+	/* 移动端优化（手机）：使用contain确保图片完整显示 */
+	@media (max-width: 640px) {
+		.banner-image {
+			object-fit: contain !important;
+			object-position: var(--mobile-position, center) !important;
+			background: linear-gradient(to bottom,
+				rgba(0, 0, 0, 0.02),
+				rgba(0, 0, 0, 0.05)
+			);
+		}
+		:global(.dark) .banner-image {
+			background: linear-gradient(to bottom,
+				rgba(0, 0, 0, 0.3),
+				rgba(0, 0, 0, 0.5)
+			);
+		}
+	}
+	
+	/* 平板和桌面端统一使用cover样式 */
+	@media (min-width: 641px) {
+		.banner-image {
+			object-fit: cover;
+			object-position: var(--desktop-position, center);
+		}
+	}
+</style>

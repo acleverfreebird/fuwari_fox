@@ -1,4 +1,5 @@
 ---
+import type { CollectionEntry } from "astro:content";
 import path from "node:path";
 import License from "@components/misc/License.astro";
 import Markdown from "@components/misc/Markdown.astro";
@@ -12,17 +13,22 @@ import { licenseConfig } from "src/config";
 import ImageWrapper from "../../components/misc/ImageWrapper.astro";
 import PostMetadata from "../../components/PostMeta.astro";
 import { profileConfig, siteConfig } from "../../config";
+import "@/styles/markdown.css";
 import { formatDateToYYYYMMDD } from "../../utils/date-utils";
+
+interface Props {
+	entry: CollectionEntry<"posts">;
+}
 
 export async function getStaticPaths() {
 	const blogEntries = await getSortedPosts();
-	return blogEntries.map((entry) => ({
+	return blogEntries.map((entry: CollectionEntry<"posts">) => ({
 		params: { slug: entry.slug },
 		props: { entry },
 	}));
 }
 
-const { entry } = Astro.props;
+const { entry } = Astro.props as Props;
 const { Content, headings } = await entry.render();
 
 const { remarkPluginFrontmatter } = await entry.render();
@@ -47,6 +53,12 @@ const jsonLd = {
 ---
 <MainGridLayout banner={entry.data.image} title={entry.data.title} description={entry.data.description} lang={entry.data.lang} setOGTypeArticle={true} headings={headings}>
     <script is:inline slot="head" type="application/ld+json" set:html={JSON.stringify(jsonLd)}></script>
+    
+    <!-- 预连接 Waline 以优化评论加载 -->
+    <link slot="head" rel="preconnect" href="https://unpkg.com" />
+    <link slot="head" rel="dns-prefetch" href="https://unpkg.com" />
+    <link slot="head" rel="preconnect" href="https://waline.freebird2913.tech" />
+    <link slot="head" rel="dns-prefetch" href="https://waline.freebird2913.tech" />
     <div class="flex w-full rounded-[var(--radius-large)] overflow-hidden relative mb-4">
         <div id="post-container" class:list={["card-base z-10 px-6 md:px-9 pt-6 pb-4 relative w-full ",
             {}
@@ -71,7 +83,7 @@ const jsonLd = {
 
             <!-- title -->
             <div class="relative onload-animation">
-                <div
+                <h1
                     data-pagefind-body data-pagefind-weight="10" data-pagefind-meta="title"
                     class="transition w-full block font-bold mb-3
                     text-3xl md:text-[2.25rem]/[2.75rem]
@@ -80,7 +92,7 @@ const jsonLd = {
                     before:absolute before:top-[0.75rem] before:left-[-1.125rem]
                 ">
                     {entry.data.title}
-                </div>
+                </h1>
             </div>
 
             <!-- metadata -->
@@ -98,7 +110,15 @@ const jsonLd = {
             <!-- always show cover as long as it has one -->
 
             {entry.data.image &&
-                <ImageWrapper id="post-cover" src={entry.data.image} basePath={path.join("content/posts/", getDir(entry.id))} class="mb-8 rounded-xl banner-container onload-animation"/>
+                <ImageWrapper
+                    id="post-cover"
+                    src={entry.data.image}
+                    basePath={path.join("content/posts/", getDir(entry.id))}
+                    class="mb-8 rounded-xl banner-container onload-animation"
+                    priority={true}
+                    loading="eager"
+                    fetchpriority="high"
+                />
             }
 
 
@@ -111,26 +131,173 @@ const jsonLd = {
         </div>
     </div>
 
-    <div class="flex flex-col md:flex-row justify-between mb-4 gap-4 overflow-hidden w-full">
-        <a href={entry.data.nextSlug ? getPostUrlBySlug(entry.data.nextSlug) : "#"}
-           class:list={["w-full font-bold overflow-hidden active:scale-95", {"pointer-events-none": !entry.data.nextSlug}]}>
-            {entry.data.nextSlug && <div class="btn-card rounded-2xl w-full h-[3.75rem] max-w-full px-4 flex items-center !justify-start gap-4" >
-                <Icon name="material-symbols:chevron-left-rounded" class="text-[2rem] text-[var(--primary)]" />
-                <div class="overflow-hidden transition overflow-ellipsis whitespace-nowrap max-w-[calc(100%_-_3rem)] text-black/75 dark:text-white/75">
-                    {entry.data.nextTitle}
-                </div>
-            </div>}
-        </a>
 
-        <a href={entry.data.prevSlug ? getPostUrlBySlug(entry.data.prevSlug) : "#"}
-           class:list={["w-full font-bold overflow-hidden active:scale-95", {"pointer-events-none": !entry.data.prevSlug}]}>
-            {entry.data.prevSlug && <div class="btn-card rounded-2xl w-full h-[3.75rem] max-w-full px-4 flex items-center !justify-end gap-4">
-                <div class="overflow-hidden transition overflow-ellipsis whitespace-nowrap max-w-[calc(100%_-_3rem)] text-black/75 dark:text-white/75">
-                    {entry.data.prevTitle}
+    <div id="comments-container" class="card-base p-6 rounded-[var(--radius-large)] mb-4">
+        <div id="waline-placeholder" class="w-full">
+            <button
+                id="load-comments"
+                class="btn-card px-6 py-3 rounded-lg font-medium transition-all hover:scale-105 active:scale-95"
+            >
+                💬 加载评论
+            </button>
+        </div>
+    </div>
+
+    <script is:inline>
+    (function() {
+        let walineLoaded = false;
+        let walineInstance = null;
+        
+        // 获取当前主题
+        function getCurrentTheme() {
+            const LIGHT_MODE = "light";
+            const DARK_MODE = "dark";
+            const AUTO_MODE = "auto";
+            const DEFAULT_THEME = AUTO_MODE;
+            
+            const storedTheme = localStorage.getItem("theme") || DEFAULT_THEME;
+            
+            if (storedTheme === AUTO_MODE) {
+                return window.matchMedia("(prefers-color-scheme: dark)").matches ? DARK_MODE : LIGHT_MODE;
+            }
+            return storedTheme;
+        }
+        
+        async function loadWaline() {
+            if (walineLoaded) return;
+            walineLoaded = true;
+            
+            const placeholder = document.getElementById('waline-placeholder');
+            if (!placeholder) return;
+            
+            // 显示加载提示
+            placeholder.innerHTML = '<div class="text-center text-sm text-gray-500 py-4">正在加载评论...</div>';
+            
+            try {
+                // 动态加载 Waline CSS
+                const link = document.createElement('link');
+                link.rel = 'stylesheet';
+                link.href = 'https://unpkg.com/@waline/client@v3/dist/waline.css';
+                document.head.appendChild(link);
+                
+                // 使用动态 import 加载 Waline
+                const { init } = await import('https://unpkg.com/@waline/client@v3/dist/waline.js');
+                
+                console.log('Waline script loaded');
+                
+                // 清空占位符
+                placeholder.innerHTML = '';
+                
+                // 创建 Waline 容器
+                const walineContainer = document.createElement('div');
+                walineContainer.id = 'waline';
+                placeholder.appendChild(walineContainer);
+                
+                // 初始化 Waline
+                const currentTheme = getCurrentTheme();
+                walineInstance = init({
+                    el: '#waline',
+                    serverURL: 'https://waline.freebird2913.tech/',
+                    lang: 'zh-CN',
+                    dark: currentTheme === 'dark',
+                    path: location.pathname,
+                    meta: ['nick', 'mail', 'link'],
+                    requiredMeta: ['nick'],
+                    pageSize: 10,
+                    wordLimit: [0, 1000],
+                    emoji: [
+                        'https://unpkg.com/@waline/emojis@1.2.0/weibo',
+                        'https://unpkg.com/@waline/emojis@1.2.0/alus',
+                        'https://unpkg.com/@waline/emojis@1.2.0/bilibili',
+                    ],
+                    search: false,
+                    pageview: true,
+                    comment: true,
+                    copyright: true,
+                    login: 'enable',
+                });
+                
+                console.log('Waline initialized');
+                
+                // 监听主题变化
+                document.addEventListener('themeChanged', function() {
+                    if (walineInstance && walineInstance.update) {
+                        setTimeout(function() {
+                            const theme = getCurrentTheme();
+                            walineInstance.update({
+                                dark: theme === 'dark'
+                            });
+                        }, 100);
+                    }
+                });
+                
+            } catch (error) {
+                console.error('Failed to load Waline:', error);
+                placeholder.innerHTML = '<div class="text-center text-sm text-red-500 py-4">评论加载失败，请刷新页面重试</div>';
+            }
+        }
+
+        // 方案1: 用户点击加载按钮
+        const loadButton = document.getElementById('load-comments');
+        if (loadButton) {
+            loadButton.addEventListener('click', loadWaline);
+        }
+
+        // 方案2: 滚动到评论区域自动加载（使用 Intersection Observer）
+        const commentsContainer = document.getElementById('comments-container');
+        if (commentsContainer && 'IntersectionObserver' in window) {
+            const observer = new IntersectionObserver(
+                function(entries) {
+                    entries.forEach(function(entry) {
+                        if (entry.isIntersecting) {
+                            // 延迟1000ms加载，优化首屏性能
+                            setTimeout(loadWaline, 1000);
+                            observer.disconnect();
+                        }
+                    });
+                },
+                {
+                    rootMargin: '100px',
+                    threshold: 0.1
+                }
+            );
+            
+            observer.observe(commentsContainer);
+        }
+    })();
+    </script>
+
+    <div class="flex flex-col md:flex-row justify-between mb-4 gap-4 overflow-hidden w-full">
+        {
+            entry.data.nextSlug ?
+            <a href={getPostUrlBySlug(entry.data.nextSlug)}
+               class:list={["w-full font-bold overflow-hidden active:scale-95"]}>
+                <div class="btn-card rounded-2xl w-full h-[3.75rem] max-w-full px-4 flex items-center !justify-start gap-4" >
+                    <Icon name="material-symbols:chevron-left-rounded" class="text-[2rem] text-[var(--primary)]" />
+                    <div class="overflow-hidden transition overflow-ellipsis whitespace-nowrap max-w-[calc(100%_-_3rem)] text-black/75 dark:text-white/75">
+                        {entry.data.nextTitle}
+                    </div>
                 </div>
-                <Icon name="material-symbols:chevron-right-rounded" class="text-[2rem] text-[var(--primary)]" />
-            </div>}
-        </a>
+            </a> :
+            <div class:list={["w-full font-bold overflow-hidden", "pointer-events-none"]}>
+            </div>
+        }
+
+        {
+            entry.data.prevSlug ?
+            <a href={getPostUrlBySlug(entry.data.prevSlug)}
+               class:list={["w-full font-bold overflow-hidden active:scale-95"]}>
+                <div class="btn-card rounded-2xl w-full h-[3.75rem] max-w-full px-4 flex items-center !justify-end gap-4">
+                    <div class="overflow-hidden transition overflow-ellipsis whitespace-nowrap max-w-[calc(100%_-_3rem)] text-black/75 dark:text-white/75">
+                        {entry.data.prevTitle}
+                    </div>
+                    <Icon name="material-symbols:chevron-right-rounded" class="text-[2rem] text-[var(--primary)]" />
+                </div>
+            </a> :
+            <div class:list={["w-full font-bold overflow-hidden", "pointer-events-none"]}>
+            </div>
+        }
     </div>
 
 </MainGridLayout>
+

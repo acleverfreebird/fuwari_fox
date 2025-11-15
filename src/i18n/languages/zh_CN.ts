@@ -35,4 +35,13 @@ export const zh_CN: Translation = {
 	[Key.author]: "作者",
 	[Key.publishedAt]: "发布于",
 	[Key.license]: "许可协议",
+
+	[Key.friends]: "友链",
+	[Key.friendsDescription]: "这些是我的朋友们，欢迎大家互相访问！",
+
+	[Key.music]: "音乐墙",
+	[Key.musicDescription]: "我收藏的音乐，随时聆听美好旋律",
+
+	[Key.gallery]: "图片墙",
+	[Key.galleryDescription]: "我收藏的精美图片，记录生活中的美好瞬间",
 };

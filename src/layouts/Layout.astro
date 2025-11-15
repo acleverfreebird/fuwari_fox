@@ -1,9 +1,10 @@
 ---
-import "@fontsource/roboto/400.css";
-import "@fontsource/roboto/500.css";
-import "@fontsource/roboto/700.css";
+// 使用Google Fonts CDN优化字体加载性能
 
 import ConfigCarrier from "@components/ConfigCarrier.astro";
+import UmamiAnalytics from "@components/UmamiAnalytics.astro";
+import Analytics from "@vercel/analytics/astro";
+import SpeedInsights from "@vercel/speed-insights/astro";
 import { profileConfig, siteConfig } from "@/config";
 import {
 	AUTO_MODE,
@@ -19,6 +20,7 @@ import { defaultFavicons } from "../constants/icon";
 import type { Favicon } from "../types/config";
 import { pathsEqual, url } from "../utils/url-utils";
 import "katex/dist/katex.css";
+import "../styles/main.css";
 
 interface Props {
 	title?: string;
@@ -28,7 +30,8 @@ interface Props {
 	setOGTypeArticle?: boolean;
 }
 
-let { title, banner, description, lang, setOGTypeArticle } = Astro.props;
+let { title, banner, lang } = Astro.props;
+// setOGTypeArticle is defined in Props but not yet implemented
 
 // apply a class to the body element to decide the height of the banner, only used for initial page load
 // Swup can update the body for each page visit, but it's after the page transition, causing a delay for banner height change
@@ -46,13 +49,6 @@ if (!banner || typeof banner !== "string" || banner.trim() === "") {
 banner = siteConfig.banner.src;
 
 const enableBanner = siteConfig.banner.enable;
-
-let pageTitle: string;
-if (title) {
-	pageTitle = `${title} - ${siteConfig.title}`;
-} else {
-	pageTitle = `${siteConfig.title} - ${siteConfig.subtitle}`;
-}
 
 const favicons: Favicon[] =
 	siteConfig.favicon.length > 0 ? siteConfig.favicon : defaultFavicons;
@@ -78,29 +74,22 @@ const bannerOffset =
 >
 	<head>
 
-		<title>{pageTitle}</title>
-
+		<!-- 基础HTML元数据 -->
 		<meta charset="UTF-8" />
-		<meta name="description" content={description || pageTitle}>
-		<meta name="author" content={profileConfig.name}>
-
-		<meta property="og:site_name" content={siteConfig.title}>
-		<meta property="og:url" content={Astro.url}>
-		<meta property="og:title" content={pageTitle}>
-		<meta property="og:description" content={description || pageTitle}>
-		{setOGTypeArticle ? (
-        <meta property="og:type" content="article" />
-        ) : (
-        <meta property="og:type" content="website" />
-        )}
-
-		<meta name="twitter:card" content="summary_large_image">
-		<meta property="twitter:url" content={Astro.url}>
-		<meta name="twitter:title" content={pageTitle}>
-		<meta name="twitter:description" content={description || pageTitle}>
 
 		<meta name="viewport" content="width=device-width" />
 		<meta name="generator" content={Astro.generator} />
+		<!-- 优化字体加载 - 使用 font-display: swap 提升性能 -->
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" onload="this.media='all'">
+		<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap"></noscript>
+		
+		<!-- 预连接关键域名以优化网络性能 -->
+		<link rel="preconnect" href="https://get-views.freebird2913.tech" />
+		<link rel="dns-prefetch" href="https://v1.hitokoto.cn" />
+		<link rel="dns-prefetch" href="https://api.iconify.design" />
+		
 		{favicons.map(favicon => (
 			<link rel="icon"
 				  href={favicon.src.startsWith('/') ? url(favicon.src) : favicon.src}
@@ -110,48 +99,217 @@ const bannerOffset =
 		))}
 
 		<!-- Set the theme before the page is rendered to avoid a flash -->
-		<script is:inline define:vars={{DEFAULT_THEME, LIGHT_MODE, DARK_MODE, AUTO_MODE, BANNER_HEIGHT_EXTEND, PAGE_WIDTH, configHue}}>
-			// Load the theme from local storage
-			const theme = localStorage.getItem('theme') || DEFAULT_THEME;
-			switch (theme) {
-				case LIGHT_MODE:
-					document.documentElement.classList.remove('dark');
-					break
-				case DARK_MODE:
-					document.documentElement.classList.add('dark');
-					break
-				case AUTO_MODE:
-					if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-						document.documentElement.classList.add('dark');
-					} else {
-						document.documentElement.classList.remove('dark');
+		<script is:inline defer define:vars={{DEFAULT_THEME, LIGHT_MODE, DARK_MODE, AUTO_MODE, BANNER_HEIGHT_EXTEND, PAGE_WIDTH, configHue}}>
+			// 阻止初始渲染闪烁的快速主题应用
+			(function() {
+				try {
+					// Load the theme from local storage with better fallback handling
+					let theme = localStorage.getItem('theme') || DEFAULT_THEME;
+					
+					// 确保主题值有效
+					if (![LIGHT_MODE, DARK_MODE, AUTO_MODE].includes(theme)) {
+						theme = DEFAULT_THEME;
+						localStorage.setItem('theme', theme);
 					}
-			}
 
-			// Load the hue from local storage
-			const hue = localStorage.getItem('hue') || configHue;
-			document.documentElement.style.setProperty('--hue', hue);
+					// 移除可能存在的过渡类，防止闪烁
+					document.documentElement.classList.add('no-transition');
 
-			// calculate the --banner-height-extend, which needs to be a multiple of 4 to avoid blurry text
-			let offset = Math.floor(window.innerHeight * (BANNER_HEIGHT_EXTEND / 100));
-			offset = offset - offset % 4;
-			document.documentElement.style.setProperty('--banner-height-extend', `${offset}px`);
+					// 应用主题类
+					switch (theme) {
+						case LIGHT_MODE:
+							document.documentElement.classList.remove('dark');
+							break;
+						case DARK_MODE:
+							document.documentElement.classList.add('dark');
+							break;
+						case AUTO_MODE:
+							const isDarkPreferred = window.matchMedia('(prefers-color-scheme: dark)').matches;
+							if (isDarkPreferred) {
+								document.documentElement.classList.add('dark');
+							} else {
+								document.documentElement.classList.remove('dark');
+							}
+							break;
+					}
+
+					// 存储当前实际主题状态，供评论组件使用
+					const actualTheme = document.documentElement.classList.contains('dark') ? DARK_MODE : LIGHT_MODE;
+					sessionStorage.setItem('current-theme-state', actualTheme);
+
+					// Load the hue from local storage with validation
+					let hue = localStorage.getItem('hue') || configHue;
+					hue = parseInt(hue);
+					if (isNaN(hue) || hue < 0 || hue > 360) {
+						hue = configHue;
+						localStorage.setItem('hue', hue);
+					}
+					document.documentElement.style.setProperty('--hue', hue);
+
+					// calculate the --banner-height-extend, which needs to be a multiple of 4 to avoid blurry text
+					let offset = Math.floor(window.innerHeight * (BANNER_HEIGHT_EXTEND / 100));
+					offset = offset - offset % 4;
+					document.documentElement.style.setProperty('--banner-height-extend', `${offset}px`);
+
+					// 在下一帧重新启用过渡效果
+					requestAnimationFrame(() => {
+						document.documentElement.classList.remove('no-transition');
+					});
+				} catch (error) {
+					console.warn('Theme initialization error:', error);
+					// 发生错误时的兜底处理
+					document.documentElement.classList.remove('dark');
+					localStorage.setItem('theme', LIGHT_MODE);
+				}
+			})();
 		</script>
 		<style define:vars={{
 			configHue,
 			'page-width': `${PAGE_WIDTH}rem`,
 		}}></style>  <!-- defines global css variables. This will be applied to <html> <body> and some other elements idk why -->
 
-
 		<slot name="head"></slot>
 
 		<link rel="alternate" type="application/rss+xml" title={profileConfig.name} href={`${Astro.site}rss.xml`}/>
+		
+		<!-- JSON-LD Structured Data -->
+		<script type="application/ld+json" is:inline>
+		{
+			"@context": "https://schema.org",
+			"@type": "Person",
+			"name": "freebird2913",
+			"url": "https://www.freebird2913.tech",
+			"description": "热爱技术的高中生，专注于编程学习和数码科技分享",
+			"sameAs": [
+				"https://github.com/acleverfreebird"
+			],
+			"knowsAbout": ["编程", "前端开发", "Python", "JavaScript", "数码科技", "Astro"],
+			"jobTitle": "学生",
+			"worksFor": {
+				"@type": "Organization",
+				"name": "高中生"
+			}
+		}
+		</script>
+		
+		<script type="application/ld+json" is:inline>
+		{
+			"@context": "https://schema.org",
+			"@type": "Blog",
+			"name": "freebird2913技术博客",
+			"url": "https://www.freebird2913.tech",
+			"description": "freebird2913的个人技术博客，专注编程学习、数码科技分享",
+			"author": {
+				"@type": "Person",
+				"name": "freebird2913"
+			},
+			"publisher": {
+				"@type": "Person",
+				"name": "freebird2913"
+			},
+			"inLanguage": "zh-CN",
+			"keywords": ["技术博客", "编程学习", "数码科技", "freebird2913", "前端开发", "Python", "JavaScript"]
+		}
+		</script>
 
+		<!-- Umami Analytics -->
+		<UmamiAnalytics />
+
+		<!-- Microsoft Clarity tracking - 改进的延迟加载 -->
+		<script is:inline>
+			(function() {
+				let clarityLoaded = false;
+				let clarityAttempted = false;
+				
+				function loadClarity() {
+					if (clarityLoaded || clarityAttempted) return;
+					clarityAttempted = true;
+					
+					try {
+						// 确保 DOM 完全加载
+						if (document.readyState !== 'complete') {
+							window.addEventListener('load', loadClarity, { once: true });
+							return;
+						}
+						
+						const script = document.createElement('script');
+						script.src = 'https://www.clarity.ms/tag/tdtze87osu?ref=bwt';
+						script.async = true;
+						script.defer = true;
+						
+						script.onload = function() {
+							clarityLoaded = true;
+						};
+						
+						script.onerror = function() {
+							// 静默处理加载失败，不影响用户体验
+							if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+								console.warn('⚠️ Clarity failed to load');
+							}
+						};
+						
+						document.head.appendChild(script);
+					} catch (error) {
+						// 静默处理错误
+						if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+							console.warn('Clarity initialization error:', error);
+						}
+					}
+				}
+
+				// 延迟 5 秒或用户交互后加载 - 优化性能同时保证数据收集
+				if (document.readyState === 'complete') {
+					setTimeout(loadClarity, 5000);
+				} else {
+					window.addEventListener('load', function() {
+						setTimeout(loadClarity, 5000);
+					}, { once: true });
+				}
+				
+				// 或者在用户首次交互时加载
+				['click', 'scroll', 'keydown', 'touchstart'].forEach(function(event) {
+					window.addEventListener(event, loadClarity, { once: true, passive: true });
+				});
+			})();
+		</script>
+
+		<!-- Service Worker 注册 - 性能优化 -->
+		<script is:inline>
+		(function() {
+			if ('serviceWorker' in navigator) {
+				window.addEventListener('load', function() {
+					navigator.serviceWorker.register('/sw.js')
+						.then(function(registration) {
+							console.log('✅ Service Worker 注册成功:', registration.scope);
+							
+							// 检查更新
+							registration.addEventListener('updatefound', function() {
+								const newWorker = registration.installing;
+								if (newWorker) {
+									newWorker.addEventListener('statechange', function() {
+										if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+											// 新版本可用
+											console.log('🔄 发现新版本');
+											// 可以在这里显示更新提示
+										}
+									});
+								}
+							});
+						})
+						.catch(function(error) {
+							console.error('❌ Service Worker 注册失败:', error);
+						});
+				});
+			}
+		})();
+		</script>
 	</head>
 	<body class=" min-h-screen transition " class:list={[{"lg:is-home": isHomePage, "enable-banner": enableBanner}]}
 		  data-overlayscrollbars-initialize
 	>
 		<ConfigCarrier></ConfigCarrier>
+		<SpeedInsights />
+		<Analytics />
 		<slot />
 
 		<!-- increase the page height during page transition to prevent the scrolling animation from jumping -->
@@ -363,12 +521,30 @@ function showBanner() {
 	banner.classList.remove('opacity-0', 'scale-105');
 }
 
-function init() {
+async function init() {
 	// disableAnimation()()		// TODO
+	// 关键初始化 - 立即执行
 	loadTheme();
+	
+	// 让出主线程，避免长任务阻塞
+	await new Promise(resolve => setTimeout(resolve, 0));
+	
 	loadHue();
-	initCustomScrollbar();
+	
+	await new Promise(resolve => setTimeout(resolve, 0));
+	
 	showBanner();
+	
+	// 非关键初始化 - 延迟执行以优化 INP
+	if ('requestIdleCallback' in window) {
+		requestIdleCallback(() => {
+			initCustomScrollbar();
+		}, { timeout: 2000 });
+	} else {
+		setTimeout(() => {
+			initCustomScrollbar();
+		}, 100);
+	}
 }
 
 /* Load settings when entering the site */
@@ -493,25 +669,48 @@ function scrollFunction() {
 		}
 	}
 }
-window.onscroll = scrollFunction
+// 使用节流优化滚动性能，减少 INP
+function throttle(func: (...args: any[]) => void, wait: number) {
+	let timeout: ReturnType<typeof setTimeout> | undefined;
+	return function executedFunction(...args: any[]) {
+		const later = () => {
+			clearTimeout(timeout);
+			func(...args);
+		};
+		clearTimeout(timeout);
+		timeout = setTimeout(later, wait);
+	};
+}
+
+window.onscroll = throttle(scrollFunction, 100);
 
 window.onresize = () => {
-	// calculate the --banner-height-extend, which needs to be a multiple of 4 to avoid blurry text
-	let offset = Math.floor(window.innerHeight * (BANNER_HEIGHT_EXTEND / 100));
-	offset = offset - offset % 4;
-	document.documentElement.style.setProperty('--banner-height-extend', `${offset}px`);
+	// 使用 requestAnimationFrame 避免强制重排
+	requestAnimationFrame(() => {
+		// calculate the --banner-height-extend, which needs to be a multiple of 4 to avoid blurry text
+		let offset = Math.floor(window.innerHeight * (BANNER_HEIGHT_EXTEND / 100));
+		offset = offset - offset % 4;
+		document.documentElement.style.setProperty('--banner-height-extend', `${offset}px`);
+	});
 }
 
 </script>
 
 <script>
-import PhotoSwipeLightbox from "photoswipe/lightbox"
-import "photoswipe/style.css"
+// 动态导入PhotoSwipe以优化初始加载性能
+let lightbox: any
+let PhotoSwipeLightbox: any
 
-let lightbox: PhotoSwipeLightbox
-let pswp = import("photoswipe")
-
-function createPhotoSwipe() {
+async function createPhotoSwipe() {
+	// 延迟导入PhotoSwipe模块
+	if (!PhotoSwipeLightbox) {
+		const module = await import("photoswipe/lightbox")
+		PhotoSwipeLightbox = module.default
+		await import("photoswipe/style.css")
+	}
+	
+	const pswp = import("photoswipe")
+	
 	lightbox = new PhotoSwipeLightbox({
 		gallery: ".custom-md img, #post-cover img",
 		pswpModule: () => pswp,
@@ -526,7 +725,7 @@ function createPhotoSwipe() {
 		doubleTapAction: 'zoom',
 	})
 
-	lightbox.addFilter("domItemData", (itemData, element) => {
+	lightbox.addFilter("domItemData", (itemData: any, element: HTMLElement) => {
 		if (element instanceof HTMLImageElement) {
 			itemData.src = element.src
 

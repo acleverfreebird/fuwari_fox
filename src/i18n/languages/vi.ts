@@ -35,4 +35,13 @@ export const vi: Translation = {
 	[Key.author]: "Tác giả",
 	[Key.publishedAt]: "Đăng vào lúc",
 	[Key.license]: "Giấy phép bản quyền",
+	[Key.friends]: "Bạn bè",
+	[Key.friendsDescription]:
+		"Đây là những người bạn của tôi, hãy thoải mái ghé thăm nhau!",
+	[Key.music]: "Âm nhạc",
+	[Key.musicDescription]:
+		"Bộ sưu tập nhạc yêu thích của tôi, nghe những giai điệu hay bất cứ lúc nào",
+	[Key.gallery]: "Bộ sưu tập",
+	[Key.galleryDescription]:
+		"Bộ sưu tập ảnh showcasing những khoảnh khắc đáng nhớ và phong cảnh đẹp",
 };

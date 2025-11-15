@@ -22,7 +22,19 @@ const postsCollection = defineCollection({
 const specCollection = defineCollection({
 	schema: z.object({}),
 });
+
+const friendsCollection = defineCollection({
+	schema: z.object({
+		title: z.string(),
+		url: z.string().url(),
+		avatar: z.string().optional().default(""),
+		description: z.string().optional().default(""),
+		category: z.string().optional().default("其他"),
+	}),
+});
+
 export const collections = {
 	posts: postsCollection,
 	spec: specCollection,
+	friends: friendsCollection,
 };

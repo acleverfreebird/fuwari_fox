@@ -1,12 +1,13 @@
 import sitemap from "@astrojs/sitemap";
 import svelte from "@astrojs/svelte";
 import tailwind from "@astrojs/tailwind";
+import vercel from "@astrojs/vercel";
 import { pluginCollapsibleSections } from "@expressive-code/plugin-collapsible-sections";
 import { pluginLineNumbers } from "@expressive-code/plugin-line-numbers";
 import swup from "@swup/astro";
+import { defineConfig } from "astro/config";
 import expressiveCode from "astro-expressive-code";
 import icon from "astro-icon";
-import { defineConfig } from "astro/config";
 import rehypeAutolinkHeadings from "rehype-autolink-headings";
 import rehypeComponents from "rehype-components"; /* Render the custom directive content */
 import rehypeKatex from "rehype-katex";
@@ -16,19 +17,24 @@ import remarkGithubAdmonitionsToDirectives from "remark-github-admonitions-to-di
 import remarkMath from "remark-math";
 import remarkSectionize from "remark-sectionize";
 import { expressiveCodeConfig } from "./src/config.ts";
+import { pluginCodeBlockCollapse } from "./src/plugins/expressive-code/code-block-collapse.ts";
+import { pluginCustomCopyButton } from "./src/plugins/expressive-code/custom-copy-button.js";
 import { pluginLanguageBadge } from "./src/plugins/expressive-code/language-badge.ts";
 import { AdmonitionComponent } from "./src/plugins/rehype-component-admonition.mjs";
 import { GithubCardComponent } from "./src/plugins/rehype-component-github-card.mjs";
 import { parseDirectiveNode } from "./src/plugins/remark-directive-rehype.js";
 import { remarkExcerpt } from "./src/plugins/remark-excerpt.js";
 import { remarkReadingTime } from "./src/plugins/remark-reading-time.mjs";
-import { pluginCustomCopyButton } from "./src/plugins/expressive-code/custom-copy-button.js";
 
 // https://astro.build/config
 export default defineConfig({
-	site: "https://fuwari.vercel.app/",
+	site: "https://www.freebird2913.tech/",
 	base: "/",
 	trailingSlash: "always",
+
+	// 确保manifest.json被复制到构建目录
+	publicDir: "./public",
+
 	integrations: [
 		tailwind({
 			nesting: true,
@@ -49,34 +55,63 @@ export default defineConfig({
 		}),
 		icon({
 			include: {
-				"preprocess: vitePreprocess(),": ["*"],
+				"material-symbols": ["*"],
 				"fa6-brands": ["*"],
 				"fa6-regular": ["*"],
 				"fa6-solid": ["*"],
 			},
 		}),
 		expressiveCode({
-			themes: [expressiveCodeConfig.theme, expressiveCodeConfig.theme],
+			themes: [expressiveCodeConfig.theme],
 			plugins: [
+				pluginCodeBlockCollapse({
+					collapseAfter: 15, // 从20降到15行，减少初始渲染
+					defaultCollapsed: true, // 默认折叠长代码块
+				}),
 				pluginCollapsibleSections(),
 				pluginLineNumbers(),
 				pluginLanguageBadge(),
-				pluginCustomCopyButton()
+				pluginCustomCopyButton(),
 			],
 			defaultProps: {
 				wrap: true,
 				overridesByLang: {
-					'shellsession': {
+					shellsession: {
 						showLineNumbers: false,
+					},
+					// 将自定义语言映射到现有语言
+					sudoers: {
+						showLineNumbers: true,
+					},
+					conf: {
+						showLineNumbers: true,
+					},
+					environment: {
+						showLineNumbers: true,
 					},
 				},
 			},
+			// 包含支持的语言
+			langs: [
+				"bash",
+				"shell",
+				"ini",
+				"properties",
+				"json",
+				"yaml",
+				"toml",
+				"txt",
+				// 添加常用的配置文件语言
+				"diff",
+				"log",
+			],
 			styleOverrides: {
 				codeBackground: "var(--codeblock-bg)",
 				borderRadius: "0.75rem",
 				borderColor: "none",
 				codeFontSize: "0.875rem",
-				codeFontFamily: "'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+				codeFontFamily:
+					"'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
 				codeLineHeight: "1.5rem",
 				frames: {
 					editorBackground: "var(--codeblock-bg)",
@@ -87,21 +122,22 @@ export default defineConfig({
 					editorActiveTabIndicatorBottomColor: "var(--primary)",
 					editorActiveTabIndicatorTopColor: "none",
 					editorTabBarBorderBottomColor: "var(--codeblock-topbar-bg)",
-					terminalTitlebarBorderBottomColor: "none"
+					terminalTitlebarBorderBottomColor: "none",
 				},
 				textMarkers: {
 					delHue: 0,
 					insHue: 180,
-					markHue: 250
-				}
+					markHue: 250,
+				},
 			},
 			frames: {
 				showCopyToClipboardButton: false,
-			}
+			},
 		}),
-        svelte(),
+		svelte(),
 		sitemap(),
 	],
+
 	markdown: {
 		remarkPlugins: [
 			remarkMath,
@@ -153,9 +189,43 @@ export default defineConfig({
 			],
 		],
 	},
+
 	vite: {
 		build: {
+			cssMinify: true, // 使用默认的esbuild，更稳定
+			minify: "terser",
+			terserOptions: {
+				compress: {
+					drop_console: true,
+					drop_debugger: true,
+				},
+			},
 			rollupOptions: {
+				output: {
+					// 优化代码分割 - 合并Swup相关模块减少网络依赖链
+					manualChunks: (id) => {
+						// 合并所有Swup相关模块到一个chunk
+						if (id.includes("@swup/") || id.includes("swup")) {
+							return "swup-bundle";
+						}
+						// UI组件库
+						if (id.includes("photoswipe") || id.includes("overlayscrollbars")) {
+							return "ui-components";
+						}
+						// Svelte相关
+						if (id.includes("svelte")) {
+							return "svelte-runtime";
+						}
+						// Iconify
+						if (id.includes("@iconify")) {
+							return "iconify";
+						}
+						// 其他node_modules作为vendor
+						if (id.includes("node_modules")) {
+							return "vendor";
+						}
+					},
+				},
 				onwarn(warning, warn) {
 					// temporarily suppress this warning
 					if (
@@ -168,5 +238,36 @@ export default defineConfig({
 				},
 			},
 		},
+		// 添加构建后IndexNow推送钩子
+		plugins: [
+			{
+				name: "indexnow-submit",
+				buildEnd() {
+					// 仅在生产构建时提示
+					if (process.env.NODE_ENV === "production") {
+						console.log("[IndexNow] 构建完成，自动推送功能已准备就绪");
+						console.log(
+							'[IndexNow] 使用 "npm run indexnow:submit" 来手动推送所有页面到搜索引擎',
+						);
+					}
+				},
+			},
+		],
+	},
+
+	adapter: vercel(),
+
+	// 图片优化配置
+	image: {
+		service: {
+			entrypoint: "astro/assets/services/sharp",
+		},
+		domains: ["www.freebird2913.tech"],
+	},
+
+	// 输出优化
+	compressHTML: true,
+	build: {
+		inlineStylesheets: "always", // 内联小CSS文件以减少HTTP请求
 	},
 });
